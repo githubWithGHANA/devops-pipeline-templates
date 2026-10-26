@@ -1,0 +1,57 @@
+# Application stack (sanitized template).
+# Start from the template directory: docker compose up -d --build
+# On the EC2 host, run from the app directory with the deploy env file:
+#   docker compose --env-file deployment-images.env up -d
+name: ${APP_NAME:-app}
+
+services:
+  db:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-appdb}
+      POSTGRES_USER: ${DB_USER:-app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in deploy.env}
+      TZ: UTC
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-app} -d ${DB_NAME:-appdb}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+    networks:
+      app-network:
+        ipv4_address: 172.28.0.2
+
+  app:
+    image: ${APP_IMAGE:?Set APP_IMAGE in deployment-images.env}
+    pull_policy: always
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    env_file: deploy.env
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/${DB_NAME:-appdb}
+      DATABASE_USERNAME: ${DB_USER:-app}
+      DATABASE_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in deploy.env}
+      TRUSTED_PROXIES: 172.28.0.10
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 60s
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    networks:
+      app-network:
+        ipv4_address: 172.28.0.10
+
+volumes:
+  db-data:
+
+networks:
+  app-network:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

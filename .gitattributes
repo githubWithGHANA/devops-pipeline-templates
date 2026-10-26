@@ -1,0 +1,6 @@
+
+infra/scripts/*.sh text eol=lf
+infra/appspec.yml text eol=lf
+
+# Template package: keep LF across Windows checkouts so pre-push CRLF checks stay meaningful.
+devops-pipeline-templates/** text eol=lf
